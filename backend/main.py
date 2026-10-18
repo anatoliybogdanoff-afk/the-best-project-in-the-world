@@ -1,5 +1,8 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import io
+import csv
+import uuid
 
 app = FastAPI()
 
@@ -17,11 +20,28 @@ async def health():
 
 @app.post("/api/analyze")
 async def analyze_csv(file: UploadFile = File(...)):
-    return {
-        "analysis_id": "demo_123",
-        "results": [
-            {
-                "passenger_id": "DEMO001",
+    if (not file.filename.endswith(".csv")):
+        raise HTTPException(status_code=400, detail="File must end with .csv")
+
+    contents = await file.read(file.size)
+    format_contents = contents.decode("utf-8")
+
+    buffer = io.StringIO(format_contents)
+    reader = csv.DictReader(buffer)
+
+    passengers = []
+    required_items = ["passenger_id", "period_start", "period_end"]
+    for col in required_items:
+        if col not in reader.fieldnames:
+            raise HTTPException(status_code=400, detail=f'Column {col} is required')
+
+    for row in reader:
+        pass_id = row.get("passenger_id")
+        if pass_id is None:
+            raise HTTPException(status_code=400, detail="Passenger id is required")
+
+        passengers.append({
+                "passenger_id": pass_id,
                 "period_start": "2017-10-01",
                 "period_end": "2017-10-30",
                 "display_name": None,
@@ -31,8 +51,14 @@ async def analyze_csv(file: UploadFile = File(...)):
                 "model_explanation": None,
                 "quality_warnings": [],
                 "history_available": False
-            }
-        ]
+            })
+
+    if (len(passengers) == 0):
+        raise HTTPException(status_code=400, detail="File is empty")
+
+    return {
+        "analysis_id": str(uuid.uuid4()),
+        "results": passengers
     }
 
 @app.get("/api/analyses/{analysis_id}/passengers/{passenger_id}")
