@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#FFD1EA">
+  <title>Catch the Spies — анализ поездок</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#upload">Перейти к загрузке</a>
+
+
+  <main class="hero">
+    <div class="hero-inner">
+      <div class="hero-heading">
+
+        <h1>PinkSky<span>Trace</span></h1>
+      </div>
+
+      <div class="hero-bottom">
+        <div class="hero-description">
+          <span class="small-rule" aria-hidden="true"></span>
+          <h2>Ни шагу вперед<br>Дальше - меньше</h2>
+        </div>
+
+        <section class="upload-panel" id="upload" aria-labelledby="upload-heading">
+          <p class="section-label">Начать прогноз</p>
+          <h2 id="upload-heading">Загрузите CSV файл</h2>
+
+          <div class="file-box">
+            <input id="data-file" name="file" type="file" accept=".csv,text/csv"
+              aria-describedby="file-help upload-status">
+          </div>
+
+
+          <button class="analyze-button" type="button" disabled>
+            Запустить анализ <span aria-hidden="true">↗</span>
+          </button>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
