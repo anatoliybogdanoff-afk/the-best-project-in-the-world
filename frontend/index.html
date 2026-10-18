@@ -29,9 +29,9 @@
           <h2 id="upload-heading">Загрузите CSV файл</h2>
 
           <div class="file-box">
-            <input id="data-file" name="file" type="file" accept=".csv,text/csv"
-              aria-describedby="file-help upload-status">
-          </div>
+            <input id="data-file" name="file" type="file" accept=".csv,text/csv"aria-describedby="file-help upload-status">
+        
+        </div>
 
 
           <button class="analyze-button" type="button" disabled>
@@ -41,5 +41,93 @@
       </div>
     </div>
   </main>
+  <section class="results" id="results" aria-labelledby="results-heading" hidden>
+  <div class="results-header">
+    <div>
+      <p class="section-label">Результаты</p>
+      <h2 id="results-heading">Пассажиры для проверки</h2>
+    </div>
+
+    <span class="demo-badge">Демонстрационные данные</span>
+  </div>
+
+  <p class="results-description">
+    Пример отображения результатов. Загруженный файл пока не анализируется.
+    Оценка аномальности не является вероятностью того, что пассажир — шпион.
+  </p>
+
+  <div class="table-wrapper">
+    <table class="results-table">
+      <caption>Пример результатов анализа пассажиров</caption>
+      <thead>
+        <tr>
+          <th scope="col">Пассажир</th>
+          <th scope="col">Оценка аномальности</th>
+          <th scope="col">Наблюдаемые признаки</th>
+          <th scope="col">Подробности</th>
+            <td>
+            <button
+                class="details-button"
+                type="button"
+                data-passenger-id="DEMO-001"
+            >
+                Подробнее
+            </button>
+            </td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>DEMO-001</td>
+          <td><span class="score">0,82</span></td>
+          <td>24 уникальных перелёта за 30 дней</td>
+            <td>
+            <button
+                class="details-button"
+                type="button"
+                data-passenger-id="DEMO-001"
+            >
+                Подробнее
+            </button>
+            </td>
+        </tr>
+        <tr>
+          <td>DEMO-002</td>
+          <td><span class="score">0,67</span></td>
+          <td>Два разрыва в последовательности маршрутов</td>
+            <td>
+            <button
+                class="details-button"
+                type="button"
+                data-passenger-id="DEMO-001"
+            >
+                Подробнее
+            </button>
+            </td>
+        </tr>
+        <tr>
+          <td>DEMO-003</td>
+          <td><span class="score">0,21</span></td>
+          <td>Три уникальных перелёта за 30 дней</td>
+        
+        <td>
+        <button
+            class="details-button"
+            type="button"
+            data-passenger-id="DEMO-001"
+        >
+            Подробнее
+        </button>
+        </td>        
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="results-description">
+    Значения и оценки вымышлены для проверки интерфейса.
+  </p>
+</section>
+  <script src="./script.js"></script>
 </body>
 </html>
