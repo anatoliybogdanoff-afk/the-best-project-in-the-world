@@ -1,6 +1,23 @@
+<<<<<<< HEAD
 
 /data/
 .env
 .venv/
 __pycache__/
 *.pyc
+=======
+.venv/
+__pycache__/
+*.pyc
+.env
+.idea/
+staging/
+.extract/
+output/
+*.csv
+*.xlsx
+*.yaml
+*.yml
+!docker-compose.yml
+!requirements.txt
+>>>>>>> 4b27e99 (commit)

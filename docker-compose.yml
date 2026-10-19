@@ -1,0 +1,33 @@
+# Spy Flights PostgreSQL — для команды (Windows / Linux / macOS)
+# Поднять: docker compose up -d
+# Дождаться healthy, потом: docker compose logs db | findstr /i "Load finished"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: spy-flights-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: spy
+      POSTGRES_PASSWORD: spy
+      POSTGRES_DB: spy_flights
+      # чтобы init-скрипты видели CSV
+      STAGING_DIR: /staging
+    ports:
+      # По умолчанию 5434: 5432 часто занят обычным PostgreSQL на ПК.
+      # Сменить порт: файл .env → SPY_PG_PORT=5435 (и тот же порт в DBeaver).
+      - "${SPY_PG_PORT:-5434}:5432"
+    volumes:
+      - spy_pgdata:/var/lib/postgresql/data
+      - ./sql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql/02_load.sh:/docker-entrypoint-initdb.d/02_load.sh:ro
+      - ./staging:/staging:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spy -d spy_flights"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  spy_pgdata:
