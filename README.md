@@ -1,78 +1,111 @@
-<<<<<<< HEAD
-# the-best-project-in-the-world
-You won’t see anything worse than this.
-=======
 # Catch the Spies — DATA (Маша Валова)
 
-PostgreSQL (`work`) + Python-анализ гипотез. Большие CSV/`staging` в Git не кладём.
+## Что запускать
 
-**Для команды (Windows):** готовый дамп + Docker — архив  
-`Загрузки/spy_db_ready.zip` (инструкция внутри: `КАК_ЗАПУСТИТЬ_НА_WINDOWS.txt`).  
-Там уже `public` + `work` + `v_abc`, без перегрузки CSV.
-
-## Быстрый старт (эта машина, уже поднятый контейнер)
+**Пересобрать витрины с нуля** (сырые `forum` / `skyteam` / `pointz` **не трогает**):
 
 ```bash
-docker compose up -d          # порт в .env, обычно 5434
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python -m analysis.run_analysis   # веса + route_tail + doc_conflict
+cd /home/thm/skyteam_parser
+.venv/bin/python -m analysis.build_person_wide
 ```
 
-DBeaver: `localhost:5434`, БД `spy_flights`, user/password `spy`/`spy`.
+Пересоздаёт: `meta.norm_loyalty_card`, `feat.*`, `stage.*`.
 
-## Где смотреть
+Проверка после сборки:
 
-| Что | Куда |
-|-----|------|
-| Кандидаты A/B/C | `work.v_abc` |
-| Находки | `work.finding` (`finding_type`, `severity`, `detail`) |
-| Доказательства | `work.evidence` → `work.flight` |
-| Источник рейса | `work.flight_source` |
-| Веса критериев | `analysis/config.py` → `SEVERITY` |
-| SQL-сводка | `sql/13_all_hypotheses.sql` |
-| Word для команды | `reports/DATA_report_minimal.docx` |
+```bash
+.venv/bin/python scripts/verify_feat.py
+```
+
+## Почему в `person_evidence` много NULL
+
+Это **не баг**. Одна строка evidence = один человек, колонки на **все** критерии.
+
+| В `person_features` | В `person_evidence` |
+|---------------------|---------------------|
+| `spike_windows_n = 0` | `spike_*` = **NULL** (критерий не сработал) |
+| `spike_windows_n > 0` | `spike_*` **заполнены** id рейсов пика |
+| `high_freq_windows_n = 0` | `high_freq_*` = NULL |
+| всегда | `card_numbers`, `first_flight_date` / `last_flight_date` заполнены |
+
+Смотри человека с `spike_windows_n > 0` — там spike-колонки не пустые.  
+Пустые `high_freq_*` при нулевом high_freq — ожидаемо.
 
 ```sql
-SELECT * FROM work.v_abc WHERE risk_tier = 'A' ORDER BY suspicion_score DESC LIMIT 50;
-SELECT * FROM work.finding WHERE passenger_id = 'card:…' ORDER BY severity DESC;
-SELECT e.*, fl.flight_date, fl.flight_number, fl.from_airport, fl.to_airport
-FROM work.evidence e
-LEFT JOIN work.flight fl ON fl.flight_id = e.flight_id
-WHERE e.finding_id = …;
+SELECT f.person_id, f.spike_windows_n, f.high_freq_windows_n,
+       e.spike_skyteam_flight_ids, e.high_freq_skyteam_flight_ids
+FROM feat.person_features f
+JOIN feat.person_evidence e USING (person_id)
+WHERE f.spike_windows_n > 0
+LIMIT 5;
 ```
 
-## finding_type
+## Почему `meta` «пустая»
 
-| Код | Критерий | Вес по умолчанию |
-|-----|----------|------------------|
-| `high_freq` | высокая частота за 30д | 2 |
-| `spike` | всплеск vs прошлые 30д | 2 |
-| `route_gap` | разрыв маршрута | 2 |
-| `quick_return` | туда-обратно ≤ 1 день | 2 |
-| `flight_conflict` | разные маршруты в источниках | 3 |
-| `id_conflict` | разные ФИО на карте | 1 |
-| `doc_conflict` | разные документы Sirena | 2 |
-| `card_multi_owner` | карта у нескольких профилей | 3 |
-| `route_tail` | «хвост»: повтор маршрута с задержкой | 2 |
+В `meta` **нет таблиц** — только функция `meta.norm_loyalty_card(program, number)`.  
+В DBeaver: Schema → **meta** → **Functions** (не Tables).  
+Нужна, чтобы SQL и Python одинаково нормализовали карты (`FB 123`).
 
-Непроверяемо: время бронирования, отмены билетов, паспорта форума (пустые). Подробности — в Word-отчёте.
+## Схемы
 
-## Структура
+| Схема | Содержимое |
+|-------|------------|
+| `forum` / `skyteam` / `pointz` | Сырьё (не дропается сборкой) |
+| `meta` | Функция `norm_loyalty_card` |
+| `stage` | Промежуточные таблицы сборки |
+| `feat` | `person_features` + `person_evidence` + `person_card` + `card_conflict` |
+
+**Карта у нескольких аккаунтов:** склейка всё равно даёт один `person_id` (кластер), но детали не теряются — таблица `feat.card_conflict` + флаг `card_multi_profile_n` (приоритетный finding, не шум).
+
+## SQL в IDE
+
+Критерии лежат в **`sql/build/*.sql`** — открывай их, подсветка SQL работает.  
+Python только подставляет `__THR__` и т.п. и вызывает `execute_script`.
+
+### Зачем `execute_script`
+
+`asyncpg` за один `conn.execute(...)` принимает **одну** команду.  
+Файл вида `TRUNCATE …; INSERT …;` режется по `;` и выполняется по шагам.  
+Это не «магия», а ограничение драйвера.
+
+## Docker (готовая БД для команды)
+
+Сборка для девочек: **`/home/thm/Загрузки/spy_db_ready.zip`** (~224 MB).  
+Внутри: `docker-compose.yml` (Postgres **17**), `dump/spy_flights.dump`, restore-скрипт, инструкция Windows.
+
+```bash
+unzip spy_db_ready.zip && cd spy_db_ready   # или распаковать в папку
+docker compose up -d
+bash scripts/verify_docker_db.sh            # 35 таблиц, строки как в manifest
+```
+
+Подробнее: `README_DOCKER.txt`, `КАК_ЗАПУСТИТЬ_НА_WINDOWS.txt`.
+
+## Пороги
+
+`analysis/config.py` — единственное место с порогами критериев.
+
+## Документы (Sirena)
+
+Finding по Sirena traveldoc (только дубли **одного** типа): `doc_rf_conflict_n` (10 цифр),
+`doc_foreign_conflict_n` (9 цифр), `doc_other_conflict_n`. Пара РФ+загран — не конфликт.
+
+## Хвост маршрута
+
+`route_tail_n` — средние OD (`SHADOW_ROUTE_*`).  
+`route_tail_rare_n` — редкие OD (`SHADOW_RARE_ROUTE_*`, сейчас 5–40 рейсов на маршрут).
+
+## Код
 
 ```
-analysis/
-  config.py          # SEVERITY, пороги shadow, статусы гипотез
-  db.py
-  apply_weights.py
-  document_id.py     # doc_conflict
-  shadow_follow.py   # route_tail
-  run_analysis.py
-sql/
-  01_schema.sql / 02_load.sh / 03_verify.sql
-  10_work_minimal.sql / 11_work_comments.sql / 13_all_hypotheses.sql
-  archive/           # одноразовая сборка clean/feat
-script.py            # SkyTeam YAML → CSV
-scripts/build_report.py
+analysis/build_person_wide.py   # вход сборки
+analysis/config.py
+analysis/db.py                  # asyncpg + execute_script
+analysis/sql_load.py            # load_sql("….sql")
+analysis/person/                # identity, flights, criteria, …
+sql/20_person_tables.sql        # DDL feat
+sql/21_stage_tables.sql         # DDL stage
+sql/22_helpers.sql              # meta.norm_loyalty_card
+sql/build/*.sql                 # запросы критериев (для IDE)
+scripts/verify_feat.py          # сверка после сборки
 ```
->>>>>>> 4b27e99 (commit)

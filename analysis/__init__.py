@@ -1,3 +1,8 @@
-"""Анализ гипотез по схеме work (Catch the Spies). Веса: analysis.config.SEVERITY."""
+"""
+DATA-часть Catch the Spies (Маша Валова).
 
-__version__ = "1.1.0"
+Главный вход: python -m analysis.build_person_wide
+Результат:    feat.person_features (числа) + feat.person_evidence (пояснения).
+"""
+
+__version__ = "3.0.0"
