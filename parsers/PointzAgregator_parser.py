@@ -1,3 +1,4 @@
+
 """Потоковый парсер PointzAggregator XML: 3 CSV + журнал проблем.
 
 Запуск:
@@ -21,6 +22,7 @@ from contextlib import ExitStack
 # date используется только для проверки формата даты перелёта.
 from datetime import date
 # Path делает работу с путями к файлам независимой от ОС.
+
 from pathlib import Path
 
 
@@ -38,8 +40,9 @@ def normalize_name(first, last):
 
 # Создаём CSV, записываем заголовки и возвращаем объект для добавления строк.
 def csv_writer(stack, folder, filename, fields):
-    # utf-8-sig удобно открывать в Excel: русские записи об ошибках не превратятся в «кракозябры».
-    # newline="" нужен модулю csv для правильной записи переводов строк.
+
+
+
     f = stack.enter_context((folder / filename).open("w", newline="", encoding="utf-8-sig"))
     writer = csv.DictWriter(f, fieldnames=fields)
     writer.writeheader()
@@ -51,8 +54,7 @@ def parse(xml_path, out_dir):
     # Создаём каталог для результатов, если его ещё нет. XML никуда не перемещаем и не переписываем.
     out_dir.mkdir(parents=True, exist_ok=True)
     counts = Counter()
-    # Справочники уже встреченных значений используются для обнаружения дублей.
-    # Они хранят только краткую информацию, а не всё дерево XML.
+
     seen_uids = {}       # uid -> (user_id, full_name)
     seen_names = {}      # normalized FIO -> (user_id, uid, full_name)
     seen_cards = {}      # card number -> (card_id, user_id, uid)
@@ -97,8 +99,6 @@ def parse(xml_path, out_dir):
                 "activity_id": activity_id, "details": details,
             })
 
-        # Обрабатываем законченный элемент <user> и освобождаем память.
-        # iterparse читает большой XML последовательно, без загрузки всего файла в память.
         # Нас интересует событие "end" для user: к этому моменту прочитаны все его карты
         # и активности, значит пользователя можно целиком обработать и затем удалить из памяти.
         iterator = ET.iterparse(xml_path, events=("start", "end"))
@@ -285,7 +285,7 @@ def parse(xml_path, out_dir):
         print(out_dir / filename)
 
 
-# Функция для удобного запуска из терминала: python3 script.py source.xml --out folder.
+
 def main():
     parser = argparse.ArgumentParser(description="Преобразует PointzAggregator XML в связанные CSV")
     parser.add_argument("xml", type=Path, help="Путь к исходному XML")
@@ -294,6 +294,5 @@ def main():
     parse(args.xml, args.out)
 
 
-# Этот код запускается только при запуске файла, а не при импорте как модуля.
 if __name__ == "__main__":
     main()

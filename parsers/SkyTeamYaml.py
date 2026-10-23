@@ -1,4 +1,4 @@
-git restore --staged имя_файла#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Парсер SkyTeam-Exchange.yaml → flights.csv + flight_cards.csv.
 
 Структура исходника: дата → рейс → карты (FF).
