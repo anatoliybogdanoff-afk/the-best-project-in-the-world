@@ -12,12 +12,8 @@ __pycache__/
 .DS_Store
 .~lock.*
 
-# Secrets / local env
-.env
-.env.*
-
 # Raw data & build artifacts (не в git)
-/data/
+
 staging/
 .extract/
 output/
