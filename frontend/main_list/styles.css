@@ -1,0 +1,174 @@
+:root {
+  --pink: #d90d7d;
+  --pink-light: #ffd1ea;
+  --ink: #4b0b2e;
+  --paper: #fff8fc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--pink-light);
+  color: var(--ink);
+  font-family: "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hero {
+  min-height: 100vh;
+  min-height: 100svh;
+
+  background-color: #e9a0b2;
+  background-image:
+    linear-gradient(
+      180deg,
+      #ffd1ea18 0%,
+      transparent 48%,
+      #30081f5c 100%
+    ),
+    url("./materials/airport-pink.png");
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.hero-inner {
+  width: 100%;
+  max-width: 1600px;
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: 62px clamp(24px, 5vw, 88px) 100px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(64px, 8vw, 120px);
+  font-weight: 850;
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+  color: var(--ink);
+}
+
+h1 span {
+  display: block;
+  padding-top: 8px;
+  color: white;
+  text-shadow: 0 2px 24px #4b0b2e12;
+}
+
+.hero-bottom {
+  margin-top: auto;
+  padding-top: 48px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  gap: 54px;
+  align-items: end;
+}
+
+.hero-description {
+  color: white;
+  text-shadow: 0 2px 14px #30081f80;
+}
+
+.small-rule {
+  display: block;
+  width: 48px;
+  height: 3px;
+  margin-bottom: 20px;
+  background: #ffb7dd;
+}
+
+.hero-description h2 {
+  margin: 0;
+  font-size: clamp(25px, 2.4vw, 35px);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.start-panel {
+  padding: 30px;
+  background: var(--paper);
+  border: 1px solid #ffffffb3;
+  border-radius: 22px;
+  box-shadow: 0 22px 75px #4b0b2e26;
+}
+
+.start-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  width: 100%;
+  padding: 18px 24px;
+  border-radius: 12px;
+
+  background: var(--pink);
+  color: white;
+  font-size: 22px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.start-button:hover {
+  background: #b90b6a;
+}
+
+.start-button:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 5px;
+}
+
+@media (max-width: 800px) {
+  .hero-inner {
+    padding-top: 42px;
+    padding-bottom: 48px;
+  }
+
+  .hero-bottom {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .start-panel {
+    width: 100%;
+    max-width: 440px;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero-inner {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .start-panel {
+    padding: 22px;
+  }
+
+  .start-button {
+    font-size: 19px;
+  }
+}
+
+.start-panel {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.start-button {
+  border: 1px solid white;
+}
