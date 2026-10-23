@@ -1,6 +1,37 @@
-
-/data/
-.env
+# Python
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+.~lock.*
+
+# Secrets / local env
+.env
+.env.*
+
+# Raw data & build artifacts (не в git)
+/data/
+staging/
+.extract/
+output/
+*.csv
+*.xlsx
+*.yaml
+# docker-compose оставляем
+!docker-compose.yml
+!requirements.txt
+
+# PostgreSQL dumps (тяжёлые; отдаём через zip отдельно)
+*.dump
+dump/
+docker/dump/
+
+# Local Docker volume leftovers
+pgdata/

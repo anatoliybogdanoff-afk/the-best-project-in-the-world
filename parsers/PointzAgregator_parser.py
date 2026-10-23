@@ -1,16 +1,27 @@
 
+"""Потоковый парсер PointzAggregator XML: 3 CSV + журнал проблем.
 
+Запуск:
+    python xml_to_csv_with_errors.py PointzAggregator-AirlinesData.xml --out parsed
+
+Исходный XML читается без изменений. Все номера карт остаются строками.
+"""
+
+# argparse отвечает за аргументы командной строки: имя XML и папку результата.
+import argparse
+# csv записывает таблицы с корректным экранированием запятых и кавычек.
 import csv
-
+# json помогает сохранить нестандартные поля событий, не теряя их.
 import json
-
+# Встроенная библиотека Python для разбора структуры XML.
 import xml.etree.ElementTree as ET
-
+# Counter — словарь-счётчик: сколько найдено пользователей, карт, ошибок и т.д.
 from collections import Counter
-
+# ExitStack закрывает сразу все созданные CSV-файлы в конце блока with.
 from contextlib import ExitStack
-
+# date используется только для проверки формата даты перелёта.
 from datetime import date
+# Path делает работу с путями к файлам независимой от ОС.
 
 from pathlib import Path
 
@@ -29,6 +40,8 @@ def normalize_name(first, last):
 
 # Создаём CSV, записываем заголовки и возвращаем объект для добавления строк.
 def csv_writer(stack, folder, filename, fields):
+
+
 
     f = stack.enter_context((folder / filename).open("w", newline="", encoding="utf-8-sig"))
     writer = csv.DictWriter(f, fieldnames=fields)
@@ -272,12 +285,14 @@ def parse(xml_path, out_dir):
         print(out_dir / filename)
 
 
+
 def main():
     parser = argparse.ArgumentParser(description="Преобразует PointzAggregator XML в связанные CSV")
     parser.add_argument("xml", type=Path, help="Путь к исходному XML")
     parser.add_argument("--out", type=Path, default=Path("parsed_csv"), help="Папка результатов")
     args = parser.parse_args()
     parse(args.xml, args.out)
+
 
 if __name__ == "__main__":
     main()
