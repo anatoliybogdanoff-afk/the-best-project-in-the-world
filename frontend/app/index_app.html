@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FAF7F9">
+  <title>PinkSkyTrace</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Ctext y='.9em' font-size='43'%3E🦆%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles_app.css">
+  <script type="module" src="./app.js"></script>
+  <script type="module" src="./upload.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#analysis" aria-label="PinkSkyTrace, главная"><span class="brand-duck" id="brandDuck"></span><span>PinkSkyTrace</span></a>
+    <nav class="main-nav" aria-label="Разделы приложения">
+      <button class="nav-item" data-view="upload"><span aria-hidden="true">↥</span>Анализ in time</button>
+      <button class="nav-item active" data-view="analysis"><span data-icon="grid"></span>Проверка пассажиров<span class="nav-dot"></span></button>
+      <button class="nav-item" data-view="criteria"><span data-icon="ducks"></span>Как работают признаки<span class="nav-count">10</span></button>
+      <button class="nav-item" data-view="method"><span data-icon="chart"></span>Как считаются баллы</button>
+    </nav>
+    <div class="sidebar-bottom"><div class="connection-status" id="connectionStatus"><i></i><span>Проверяем подключение</span></div><span class="sidebar-version">Экспертные правила · v1</span></div>
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar"><div class="breadcrumbs"><span class="breadcrumb-slash">/</span><strong id="pageTitle">Проверка пассажиров</strong></div><div class="topbar-right"><span class="local-badge"><i></i> Локальный проект</span><button class="icon-button mobile-menu" id="menuButton" aria-label="Открыть меню" aria-expanded="false"><span data-icon="grid"></span></button><span class="user-avatar" aria-label="Профиль аналитика">А</span></div></header>
+
+<section id="uploadView" class="view" hidden>
+  <div class="page-intro">
+    <div>
+      <h1>Анализ исходных данных</h1>
+      <p>Выберите файлы для подготовки данных и анализа пассажиров.</p>
+    </div>
+  </div>
+
+  <div class="import-card">
+    <h2>Исходные файлы</h2>
+
+    <p class="import-description" id="importHelp">
+      До 15 файлов за один анализ.
+      Поддерживаются исходники проекта с известной структурой.
+    </p>
+
+    <label class="import-picker">
+      <span>Выбрать файлы</span>
+      <input
+        id="sourceFiles"
+        type="file"
+        multiple
+        accept=".xml,.json,.yaml,.yml,.tab,.xlsx,.csv,.pdf"
+        aria-describedby="importHelp importStatus"
+      >
+    </label>
+
+    <p id="importStatus" class="import-status" role="status">
+      Файлы не выбраны.
+    </p>
+
+    <ul id="sourceFilesList" class="import-files"></ul>
+
+    <button id="clearSourceFiles" class="button secondary" hidden>
+      Очистить список
+    </button>
+
+    <button
+      id="runImportButton"
+      class="button primary import-run"
+      disabled
+    >
+      Запустить анализ
+    </button>
+
+    <p class="import-description">
+      Отправка файлов и автоматическая обработка пока не подключены.
+    </p>
+  </div>
+
+  <div class="import-card">
+    <h2>Какие файлы принимаем</h2>
+
+    <div class="table-wrap">
+      <table class="import-formats">
+        <thead>
+          <tr>
+            <th>Источник</th>
+            <th>Формат</th>
+          </tr>
+        </thead>
+      </table>
+    </div>
+
+  </div>
+</section>
+
+
+    <section id="analysisView" class="view">
+
+      <section class="hero" aria-labelledby="heroTitle">
+        <div class="hero-content"><div class="hero-kicker">10 критериев. Одна понятная оценка.</div><h2 id="heroTitle">Замечаем необычное.<br> Объясняем, почему.</h2><p>Соберём сигналы в истории каждого пассажира<br class="desktop-break"> и покажем вклад каждого признака.</p><div class="hero-actions"><button id="calculateButton" class="button primary"><span data-icon="spark"></span><span class="calculate-label">Рассчитать шпионов</span><span data-icon="arrow"></span></button><button class="text-button" data-view="criteria">Сначала посмотреть признаки <span>↗</span></button></div><div class="hero-fineprint">Индекс по правилам от 0 до 100 — для приоритета проверки.</div></div>
+        <div class="hero-art" id="heroArt" aria-hidden="true"></div>
+      </section>
+      <div id="calculationNotice" class="calculation-notice" role="status" hidden></div>
+      <div id="pageError" class="page-error" role="alert" hidden></div>
+
+      <section id="resultsSection" class="results-section" aria-labelledby="resultsTitle" hidden>
+        <div class="section-heading"><div><div class="eyebrow">ПЕРЕЙДЁМ К ЛЮДЯМ</div><h2 id="resultsTitle">Результаты проверки<span class="count-chip" id="resultTotal"></span></h2></div><a class="button secondary export-button" href="/api/export"><span data-icon="download"></span>Скачать CSV</a></div>
+        <div class="summary-strip" id="summaryStrip"></div>
+        <div class="results-card"><div class="results-toolbar"><label class="search-field"><span data-icon="search"></span><input id="searchInput" type="search" placeholder="Имя или ID профиля" autocomplete="off" aria-label="Найти пассажира по имени или ID"><span class="search-hint">⌕</span></label><div class="filter-pills" role="group" aria-label="Фильтр результатов"><button class="filter-pill active" data-filter="all" aria-pressed="true">Все профили</button><button class="filter-pill" data-filter="signals" aria-pressed="false">Есть сигналы</button><button class="filter-pill" data-filter="identity" aria-pressed="false">Проверить связи</button></div></div>
+          <div class="table-wrap"><table class="people-table"><thead><tr><th class="rank-column">№</th><th>Пассажир</th><th class="score-column"><button id="sortButton" aria-label="Изменить сортировку по баллам">Индекс <span>↓</span></button></th><th class="signal-column">Что заметили</th><th class="row-arrow-cell"></th></tr></thead><tbody id="peopleRows"></tbody></table></div>
+          <div id="resultsEmpty" class="empty-state" hidden></div>
+          <div class="table-footer"><span id="paginationLabel"></span><div class="pagination"><button id="previousPage" class="icon-button" aria-label="Предыдущая страница">←</button><span id="pageNumber">1</span><button id="nextPage" class="icon-button" aria-label="Следующая страница">→</button></div></div>
+        </div><p class="results-note"><span data-icon="info"></span>Процент от максимального балла по правилам. Не вероятность того, что человек — шпион.</p>
+      </section>
+
+      <section id="beforeResults" class="before-results"><div class="section-heading"><div><div class="eyebrow">ПРОЗРАЧНАЯ ЛОГИКА</div><h2>Никакой магии. Только объяснения.</h2></div><button class="text-button" data-view="criteria">Все 10 признаков <span>↗</span></button></div><div class="teaser-grid" id="teaserGrid"></div></section>
+    </section>
+
+    <section id="criteriaView" class="view" hidden><div class="page-intro"><div><h1>Разберёмся на уточках.</h1><p>Двигай ползунки и смотри, когда появляется сигнал.</p></div><span class="round-duck" id="academyDuck" aria-hidden="true"></span></div><div class="academy-layout"><div class="criterion-menu" id="criterionMenu" aria-label="Выберите признак"></div><section class="academy-card" id="academyCard"></section></div></section>
+
+    <section id="methodView" class="view" hidden><div class="page-intro"><div><h1>Из чего складывается оценка.</h1><p>Сработавшие критерии добавляют свой вес к общему индексу.</p></div></div><div class="method-layout"><section class="method-card"><div class="method-formula"><span>Индекс</span><strong>Σ</strong><div>веса сработавших<br>критериев</div><span class="formula-equals">=</span><b>0–100</b></div><div id="weightsList"></div></section><aside class="method-aside"><div class="method-callout"><span data-icon="info"></span><h3>Баллы объясняют приоритет</h3><p>65% здесь — это 65 из 100 возможных баллов по выбранным правилам. Это не оценка вероятности шпионажа.</p></div><div class="method-callout"><span data-icon="database"></span><h3>Признаки уже в готовой БД</h3><p>Приложение читает витрину команды и суммирует веса. Объединение людей и значения признаков не меняются.</p></div><div class="method-callout"><span data-icon="name"></span><h3>Профиль ≠ подтверждённая связь</h3><p>У профиля могут быть перелёты и рассчитанные признаки, даже если его связь с другим источником ещё не подтверждена.</p></div></aside></div></section>
+
+  </main>
+
+  <dialog id="personDialog" class="person-dialog" aria-labelledby="personDialogTitle"><div id="personContent"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
