@@ -24,7 +24,7 @@ from pathlib import Path
 
 from analysis import config
 from analysis.db import connect, execute_script
-from analysis.person import criteria, flights, identity
+from analysis.person import cardless, criteria, flights, identity, person_entity
 from analysis.person.ensure_ids import ensure_public_row_ids
 from analysis.person.sources import ensure_source_schemas, relocate_public_tables_if_needed
 from analysis.person.sql_helpers import ensure_norm_loyalty_card
@@ -68,6 +68,9 @@ async def main() -> int:
             await identity.insert_person_rows(conn, persons)
             await identity.fill_card_person_map(conn, person_of_card)
 
+            # без карт: passport / multi-flight Forum↔Sirena → новые person_id + якоря
+            await cardless.build_cardless_persons(conn)
+
             await flights.build_person_flights(conn)
 
             await criteria.compute_high_freq(conn)
@@ -76,13 +79,17 @@ async def main() -> int:
             await criteria.compute_flight_conflict(conn)
             await criteria.compute_name_doc_multi(conn)
             await criteria.compute_route_tail(conn)
+
+            await person_entity.build_person_entity(conn)
+            await person_entity.build_flight_catalog(conn)
+
             await criteria.print_summary(conn)
 
         log(
             f"\nOK за {time.time() - t0:.1f} с\n"
             f"  сырьё:  forum.* / skyteam.* / pointz.*\n"
-            f"  stage:  card_person, flight_event, flight_unique, route_tail_leg, …\n"
-            f"  feat:   person_features + person_evidence + person_card"
+            f"  stage:  card_person, person_anchor, flight_match, flight_unique, …\n"
+            f"  feat:   person_features + person_evidence + person + flight"
         )
         return 0
     finally:

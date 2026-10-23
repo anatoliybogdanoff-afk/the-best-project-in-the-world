@@ -4,7 +4,11 @@
 flight_event — все упоминания с источником и id строки (для evidence)
 flight_unique — без дублей источников (для счётчиков и маршрутов)
 
-Нормализация карт — только через meta.norm_loyalty_card (как в Python analysis.cards).
+Номер рейса / аэропорты нормализуем в UPPER, чтобы forum+skyteam+sirena
+с одним коммерческим рейсом не плодили два «уникальных» из‑за регистра.
+
+Страны: forum даёт dep/arr_country; для остальных — stage.airport_country
+(мода страны по IATA из forum).
 """
 
 from __future__ import annotations
@@ -19,9 +23,11 @@ async def build_person_flights(conn: asyncpg.Connection) -> None:
     """
     Читает skyteam/forum/pointz/sirena → stage.flight_*, обновляет flights_n / даты.
 
-    Дедуп: один рейс в forum+skyteam = две строки в flight_event, одна в flight_unique.
+    Дедуп: один рейс в forum+skyteam = две строки в flight_event, одна в flight_unique
+    при совпадении дата+номер+OD (после upper).
     """
     log("5) Рейсы → stage.flight_event / flight_unique…")
+    await _fill_airport_country(conn)
 
     status = await conn.execute(
         """
@@ -29,9 +35,9 @@ async def build_person_flights(conn: asyncpg.Connection) -> None:
           (person_id, flight_date, flight_number, from_airport, to_airport, src, src_id)
         SELECT cp.person_id,
                NULLIF(btrim(f.date), '')::date,
-               btrim(f.flight_number),
-               nullif(btrim(f.from_airport), ''),
-               nullif(btrim(f.to_airport), ''),
+               upper(btrim(f.flight_number)),
+               upper(coalesce(nullif(btrim(f.from_airport), ''), '')),
+               upper(coalesce(nullif(btrim(f.to_airport), ''), '')),
                'skyteam',
                f.skyteam_flight_pk::text
         FROM skyteam.skyteam_flight_cards c
@@ -50,9 +56,9 @@ async def build_person_flights(conn: asyncpg.Connection) -> None:
           (person_id, flight_date, flight_number, from_airport, to_airport, src, src_id)
         SELECT DISTINCT cp.person_id,
                NULLIF(btrim(ff.flight_date), '')::date,
-               btrim(ff.flight_number),
-               nullif(btrim(ff.dep_airport), ''),
-               nullif(btrim(ff.arr_airport), ''),
+               upper(btrim(ff.flight_number)),
+               upper(coalesce(nullif(btrim(ff.dep_airport), ''), '')),
+               upper(coalesce(nullif(btrim(ff.arr_airport), ''), '')),
                'forum',
                ff.forum_flight_id::text
         FROM forum.forum_flights ff
@@ -71,9 +77,9 @@ async def build_person_flights(conn: asyncpg.Connection) -> None:
           (person_id, flight_date, flight_number, from_airport, to_airport, src, src_id)
         SELECT cp.person_id,
                NULLIF(btrim(a.date), '')::date,
-               btrim(a.code),
-               nullif(btrim(a.departure), ''),
-               nullif(btrim(a.arrival), ''),
+               upper(btrim(a.code)),
+               upper(coalesce(nullif(btrim(a.departure), ''), '')),
+               upper(coalesce(nullif(btrim(a.arrival), ''), '')),
                'pointz',
                a.pointz_activity_pk::text
         FROM pointz.pointz_activities a
@@ -99,9 +105,9 @@ async def build_person_flights(conn: asyncpg.Connection) -> None:
           (person_id, flight_date, flight_number, from_airport, to_airport, src, src_id)
         SELECT cp.person_id,
                NULLIF(btrim(s.departdate), '')::date,
-               btrim(s.flightcode),
-               nullif(btrim(s."from"), ''),
-               nullif(btrim(s.dest), ''),
+               upper(btrim(s.flightcode)),
+               upper(coalesce(nullif(btrim(s."from"), ''), '')),
+               upper(coalesce(nullif(btrim(s.dest), ''), '')),
                'sirena',
                s.sirena_record_pk::text
         FROM skyteam.sirena_records s
@@ -116,18 +122,78 @@ async def build_person_flights(conn: asyncpg.Connection) -> None:
           AND NULLIF(btrim(s.flightcode), '') IS NOT NULL
         """
     )
-    log(f"   sirena: {rowcount(status)}")
-
-    await conn.execute("ANALYZE stage.flight_event")
+    log(f"   sirena (по FF#): {rowcount(status)}")
 
     status = await conn.execute(
         """
-        INSERT INTO stage.flight_unique
-          (person_id, flight_date, flight_number, from_airport, to_airport)
-        SELECT DISTINCT ON (person_id, flight_date, flight_number, from_airport, to_airport)
-               person_id, flight_date, flight_number, from_airport, to_airport
-        FROM stage.flight_event
-        ORDER BY person_id, flight_date, flight_number, from_airport, to_airport
+        INSERT INTO stage.flight_event
+          (person_id, flight_date, flight_number, from_airport, to_airport, src, src_id)
+        SELECT DISTINCT pa.person_id,
+               NULLIF(btrim(ff.flight_date), '')::date,
+               upper(btrim(ff.flight_number)),
+               upper(coalesce(nullif(btrim(ff.dep_airport), ''), '')),
+               upper(coalesce(nullif(btrim(ff.arr_airport), ''), '')),
+               'forum',
+               ff.forum_flight_id::text
+        FROM forum.forum_flights ff
+        JOIN stage.person_anchor pa
+          ON pa.anchor_type = 'forum_profile'
+         AND pa.anchor_key = ff.profile_id
+        WHERE NULLIF(btrim(ff.flight_date), '') ~ '^\\d{4}-\\d{2}-\\d{2}$'
+          AND NULLIF(btrim(ff.flight_number), '') IS NOT NULL
+        """
+    )
+    log(f"   forum (по anchor): {rowcount(status)}")
+
+    status = await conn.execute(
+        """
+        INSERT INTO stage.flight_event
+          (person_id, flight_date, flight_number, from_airport, to_airport, src, src_id)
+        SELECT pa.person_id,
+               NULLIF(btrim(s.departdate), '')::date,
+               upper(btrim(s.flightcode)),
+               upper(coalesce(nullif(btrim(s."from"), ''), '')),
+               upper(coalesce(nullif(btrim(s.dest), ''), '')),
+               'sirena',
+               s.sirena_record_pk::text
+        FROM skyteam.sirena_records s
+        JOIN stage.person_anchor pa
+          ON pa.anchor_type = 'sirena_doc'
+         AND pa.anchor_key = upper(
+               regexp_replace(btrim(s.traveldoc), '[^0-9A-Za-z]', '', 'g')
+             )
+        WHERE coalesce(btrim(s.traveldoc), '') NOT IN ('', 'N/A')
+          AND NOT (coalesce(s.paxadditionalinfo, '') ~ 'FF#[A-Za-z]{2}')
+          AND NULLIF(btrim(s.departdate), '') ~ '^\\d{4}-\\d{2}-\\d{2}$'
+          AND NULLIF(btrim(s.flightcode), '') IS NOT NULL
+        """
+    )
+    log(f"   sirena (по doc): {rowcount(status)}")
+
+    await conn.execute("ANALYZE stage.flight_event")
+
+    # дедуп + страны через справочник IATA→country (из forum)
+    status = await conn.execute(
+        """
+        INSERT INTO stage.flight_unique (
+          person_id, flight_date, flight_number,
+          from_airport, to_airport, from_country, to_country
+        )
+        SELECT
+          e.person_id,
+          e.flight_date,
+          e.flight_number,
+          e.from_airport,
+          e.to_airport,
+          ac_from.country,
+          ac_to.country
+        FROM (
+          SELECT DISTINCT
+            person_id, flight_date, flight_number, from_airport, to_airport
+          FROM stage.flight_event
+        ) e
+        LEFT JOIN stage.airport_country ac_from ON ac_from.airport = e.from_airport
+        LEFT JOIN stage.airport_country ac_to   ON ac_to.airport = e.to_airport
         """
     )
     log(f"   flight_unique: {rowcount(status)}")
@@ -161,3 +227,34 @@ async def build_person_flights(conn: asyncpg.Connection) -> None:
         """
     )
     log("   flights_n / даты обновлены")
+
+
+async def _fill_airport_country(conn: asyncpg.Connection) -> None:
+    """Мода страны по аэропорту из forum (единственный источник со страной)."""
+    status = await conn.execute(
+        """
+        INSERT INTO stage.airport_country (airport, country)
+        SELECT airport, country
+        FROM (
+          SELECT
+            upper(btrim(airport)) AS airport,
+            btrim(country) AS country,
+            row_number() OVER (
+              PARTITION BY upper(btrim(airport))
+              ORDER BY count(*) DESC, btrim(country)
+            ) AS rn
+          FROM (
+            SELECT dep_airport AS airport, dep_country AS country
+            FROM forum.forum_flights
+            UNION ALL
+            SELECT arr_airport, arr_country
+            FROM forum.forum_flights
+          ) u
+          WHERE nullif(btrim(airport), '') IS NOT NULL
+            AND nullif(btrim(country), '') IS NOT NULL
+          GROUP BY upper(btrim(airport)), btrim(country)
+        ) ranked
+        WHERE rn = 1
+        """
+    )
+    log(f"   airport_country: {rowcount(status)}")

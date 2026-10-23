@@ -166,18 +166,36 @@ async def compute_name_doc_multi(conn: asyncpg.Connection) -> None:
         UPDATE feat.person_evidence e SET name_conflict_sirena_record_ids = s.ids
         FROM (
           WITH mapped AS (
-            SELECT DISTINCT
-              cp.person_id,
-              r.sirena_record_pk::text AS src_id
-            FROM skyteam.sirena_records r
-            JOIN stage.card_person cp
-              ON cp.card_key = meta.norm_loyalty_card(
-                   upper(substring(r.paxadditionalinfo from 'FF#([A-Za-z]{2})')),
-                   substring(r.paxadditionalinfo
-                             from 'FF#[A-Za-z]{2}[[:space:]]*([0-9]+)')
-                 )
-            WHERE r.paxadditionalinfo ~ 'FF#[A-Za-z]{2}'
-              AND nullif(btrim(r.paxname), '') IS NOT NULL
+            SELECT DISTINCT person_id, src_id
+            FROM (
+              SELECT
+                cp.person_id,
+                r.sirena_record_pk::text AS src_id
+              FROM skyteam.sirena_records r
+              JOIN stage.card_person cp
+                ON cp.card_key = meta.norm_loyalty_card(
+                     upper(substring(r.paxadditionalinfo from 'FF#([A-Za-z]{2})')),
+                     substring(r.paxadditionalinfo
+                               from 'FF#[A-Za-z]{2}[[:space:]]*([0-9]+)')
+                   )
+              WHERE r.paxadditionalinfo ~ 'FF#[A-Za-z]{2}'
+                AND nullif(btrim(r.paxname), '') IS NOT NULL
+
+              UNION
+
+              SELECT
+                pa.person_id,
+                r.sirena_record_pk::text AS src_id
+              FROM skyteam.sirena_records r
+              JOIN stage.person_anchor pa
+                ON pa.anchor_type = 'sirena_doc'
+               AND pa.anchor_key = upper(
+                     regexp_replace(btrim(r.traveldoc), '[^0-9A-Za-z]', '', 'g')
+                   )
+              WHERE coalesce(btrim(r.traveldoc), '') NOT IN ('', 'N/A')
+                AND NOT (coalesce(r.paxadditionalinfo, '') ~ 'FF#[A-Za-z]{2}')
+                AND nullif(btrim(r.paxname), '') IS NOT NULL
+            ) u
           )
           SELECT person_id,
                  string_agg(src_id, ' | ' ORDER BY src_id::bigint) AS ids
@@ -328,12 +346,22 @@ async def print_summary(conn: asyncpg.Connection) -> None:
           count(*) FILTER (WHERE card_multi_profile_n > 0),
           count(*) FILTER (WHERE route_tail_n > 0),
           count(*) FILTER (WHERE route_tail_rare_n > 0),
-          count(*) FILTER (WHERE cards_n > 1)
+          count(*) FILTER (WHERE cards_n > 1),
+          count(*) FILTER (WHERE identity_kind = 'card'),
+          count(*) FILTER (WHERE identity_kind = 'flight_match'),
+          count(*) FILTER (WHERE identity_kind = 'forum_profile'),
+          count(*) FILTER (WHERE identity_kind = 'sirena_doc'),
+          count(*) FILTER (WHERE NOT identity_resolved)
         FROM feat.person_features
         """
     )
     log("\n=== feat.person_features ===")
     log(f"  человек:             {n}")
+    log(f"  identity card:       {row[13]}")
+    log(f"  identity flight_match: {row[14]}")
+    log(f"  identity forum_only: {row[15]}")
+    log(f"  identity sirena_doc: {row[16]}")
+    log(f"  unresolved (нет паспорта): {row[17]}")
     log(f"  с >1 картой:         {row[12]}")
     log(f"  high_freq > 0:       {row[0]}")
     log(f"  spike > 0:           {row[1]}")
@@ -348,8 +376,11 @@ async def print_summary(conn: asyncpg.Connection) -> None:
     log(f"  route_tail > 0:      {row[10]}")
     log(f"  route_tail_rare > 0: {row[11]}")
     log(f"  evidence:            {await conn.fetchval('SELECT count(*) FROM feat.person_evidence')}")
-    log(f"  person_card:         {await conn.fetchval('SELECT count(*) FROM feat.person_card')}")
+    log(f"  person (сущность):   {await conn.fetchval('SELECT count(*) FROM feat.person')}")
+    log(f"  flight (каталог):    {await conn.fetchval('SELECT count(*) FROM feat.flight')}")
     log(f"  card_conflict:       {await conn.fetchval('SELECT count(*) FROM feat.card_conflict')}")
+    log(f"  flight_match assigned: "
+        f"{await conn.fetchval('SELECT count(*) FROM stage.flight_match WHERE assigned')}")
     log(f"  route_tail_leg:      {await conn.fetchval('SELECT count(*) FROM stage.route_tail_leg')}")
     log(
         f"  route_tail_leg_rare: "

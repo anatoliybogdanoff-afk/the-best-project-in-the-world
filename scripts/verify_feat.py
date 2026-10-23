@@ -31,13 +31,18 @@ async def main() -> int:
 
     n_f = await conn.fetchval("SELECT count(*) FROM feat.person_features")
     n_e = await conn.fetchval("SELECT count(*) FROM feat.person_evidence")
-    n_c = await conn.fetchval("SELECT count(*) FROM feat.person_card")
+    n_p = await conn.fetchval("SELECT count(*) FROM feat.person")
+    n_fl = await conn.fetchval("SELECT count(*) FROM feat.flight")
     if n_f != n_e:
         fail(f"features={n_f} evidence={n_e}")
     else:
         fine(f"features=evidence={n_f}")
+    if n_f != n_p:
+        fail(f"features={n_f} person={n_p}")
+    else:
+        fine(f"person=features={n_p}")
+    fine(f"feat.flight rows={n_fl}")
 
-    # 1:1 + card map
     orphan = await conn.fetchval(
         """
         SELECT count(*) FROM feat.person_features f
@@ -50,19 +55,30 @@ async def main() -> int:
     else:
         fine("каждый features имеет evidence")
 
+    # cards в feat.person совпадают со stage.card_person (агрегат)
     mismatch_cards = await conn.fetchval(
         """
         SELECT count(*) FROM (
-          SELECT card_key, person_id FROM stage.card_person
+          SELECT person_id, string_agg(card_key, ' | ' ORDER BY card_key) AS cards
+          FROM stage.card_person
+          GROUP BY person_id
           EXCEPT
-          SELECT card_key, person_id FROM feat.person_card
+          SELECT person_id, cards FROM feat.person WHERE cards IS NOT NULL
         ) x
         """
     )
     if mismatch_cards:
-        fail(f"card_person ≠ person_card: {mismatch_cards}")
+        fail(f"feat.person.cards ≠ stage.card_person: {mismatch_cards}")
     else:
-        fine(f"person_card = stage.card_person ({n_c})")
+        fine("feat.person.cards = aggregate(stage.card_person)")
+
+    crowded = await conn.fetchval(
+        "SELECT count(*) FROM feat.flight WHERE people_n >= 1000"
+    )
+    if crowded:
+        fail(f"рейсы с ≥1000 people (подозрительно): {crowded}")
+    else:
+        fine(f"нет рейсов с ≥1000 people (max={await conn.fetchval('SELECT max(people_n) FROM feat.flight')})")
 
     # flights_n vs stage
     bad_flights = await conn.fetchval(

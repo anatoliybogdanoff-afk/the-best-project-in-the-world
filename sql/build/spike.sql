@@ -1,5 +1,11 @@
--- Всплеск относительно предыдущих 30 дней.
+-- Всплеск относительно предыдущих 30 дней (H2).
 -- Плейсхолдеры: __MIN_NOW__ __RATIO__ __W__ __W_MINUS_1__ __GAP__
+--
+-- Сравниваем текущее окно [start, start+29] с предыдущим [start-30, start-1].
+-- Всплеск только если есть с чем сравнивать: prev_n > 0 и now_n / prev_n >= RATIO,
+-- плюс now_n >= MIN_NOW.
+-- prev_n = 0 → недостаточно истории (первый активный период / пауза без базы) —
+-- НЕ всплеск (в отличие от старой логики).
 
 TRUNCATE stage.spike_windows;
 TRUNCATE stage.spike_peaks;
@@ -26,10 +32,8 @@ hot AS (
   SELECT person_id, window_start, now_n AS flights_30d
   FROM win
   WHERE now_n >= __MIN_NOW__
-    AND (
-      (coalesce(prev_n, 0) = 0 AND now_n >= __MIN_NOW__)
-      OR (prev_n > 0 AND now_n / prev_n >= __RATIO__)
-    )
+    AND prev_n > 0
+    AND now_n / prev_n >= __RATIO__
 ),
 ordered AS (
   SELECT person_id, window_start, flights_30d,

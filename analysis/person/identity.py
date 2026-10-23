@@ -218,18 +218,14 @@ async def fill_card_person_map(
     conn: asyncpg.Connection, person_of_card: dict[str, int]
 ) -> None:
     """
-    Заполняет stage.card_person и feat.person_card (одна и та же связь).
+    Заполняет stage.card_person (джойны при сборке рейсов).
 
-    stage — для джойнов при сборке рейсов; feat — постоянная витрина для отладки/ML по картам.
+    Список карт для отчёта — в feat.person.cards (person_entity), не отдельная таблица.
     """
-    log("4) stage.card_person + feat.person_card…")
+    log("4) stage.card_person…")
     rows = list(person_of_card.items())
     await conn.executemany(
         "INSERT INTO stage.card_person(card_key, person_id) VALUES ($1,$2)",
         rows,
-    )
-    await conn.executemany(
-        "INSERT INTO feat.person_card(person_id, card_key) VALUES ($1,$2)",
-        [(pid, card) for card, pid in rows],
     )
     log(f"   карт в map: {len(person_of_card)}")

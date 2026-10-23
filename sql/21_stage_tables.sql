@@ -23,6 +23,12 @@ DROP TABLE IF EXISTS stage.high_freq_peaks CASCADE;
 DROP TABLE IF EXISTS stage.high_freq_windows CASCADE;
 DROP TABLE IF EXISTS stage.flight_unique CASCADE;
 DROP TABLE IF EXISTS stage.flight_event CASCADE;
+DROP TABLE IF EXISTS stage.airport_country CASCADE;
+DROP TABLE IF EXISTS stage.flight_match CASCADE;
+DROP TABLE IF EXISTS stage.cardless_sirena_leg CASCADE;
+DROP TABLE IF EXISTS stage.cardless_forum_leg CASCADE;
+DROP TABLE IF EXISTS stage.doc_on_card CASCADE;
+DROP TABLE IF EXISTS stage.person_anchor CASCADE;
 DROP TABLE IF EXISTS stage.card_person CASCADE;
 
 -- карта → человек
@@ -33,6 +39,68 @@ CREATE TABLE stage.card_person (
 CREATE INDEX ON stage.card_person (person_id);
 COMMENT ON TABLE stage.card_person IS
   'Каждая карта лояльности → person_id. Строится при склейке людей.';
+
+-- traveldoc, уже привязанный к карточному человеку через FF# Sirena
+CREATE TABLE stage.doc_on_card (
+  doc_key    text PRIMARY KEY,
+  person_id  bigint NOT NULL
+);
+CREATE INDEX ON stage.doc_on_card (person_id);
+COMMENT ON TABLE stage.doc_on_card IS
+  'Нормализованный traveldoc → person_id по Sirena-строкам с FF#. '
+  'Нужен, чтобы no-FF рейсы с тем же паспортом не плодили второго человека.';
+
+-- якоря без карт (на время сборки; зеркало — feat.person_anchor)
+CREATE TABLE stage.person_anchor (
+  person_id    bigint NOT NULL,
+  anchor_type  text NOT NULL,
+  anchor_key   text NOT NULL,
+  PRIMARY KEY (anchor_type, anchor_key)
+);
+CREATE INDEX ON stage.person_anchor (person_id);
+COMMENT ON TABLE stage.person_anchor IS
+  'forum_profile | sirena_doc → person_id. Для джойнов рейсов без карты.';
+
+-- ноги для матчинга (материализация + индексы — иначе join слишком тяжёлый)
+CREATE TABLE stage.cardless_forum_leg (
+  profile_id    text NOT NULL,
+  flight_date   date NOT NULL,
+  flight_number text NOT NULL,
+  from_airport  text NOT NULL,
+  to_airport    text NOT NULL,
+  PRIMARY KEY (profile_id, flight_date, flight_number, from_airport, to_airport)
+);
+CREATE INDEX ON stage.cardless_forum_leg (flight_date, flight_number, from_airport, to_airport);
+COMMENT ON TABLE stage.cardless_forum_leg IS
+  'Уникальные рейсы forum-профилей без карт (ключ матчинга).';
+
+CREATE TABLE stage.cardless_sirena_leg (
+  doc_key       text NOT NULL,
+  flight_date   date NOT NULL,
+  flight_number text NOT NULL,
+  from_airport  text NOT NULL,
+  to_airport    text NOT NULL,
+  PRIMARY KEY (doc_key, flight_date, flight_number, from_airport, to_airport)
+);
+CREATE INDEX ON stage.cardless_sirena_leg (flight_date, flight_number, from_airport, to_airport);
+COMMENT ON TABLE stage.cardless_sirena_leg IS
+  'Уникальные рейсы Sirena без FF# с traveldoc (ключ матчинга).';
+
+-- аудит матчинга Forum (без карт) ↔ Sirena (без FF#)
+CREATE TABLE stage.flight_match (
+  profile_id       text NOT NULL,
+  doc_key          text NOT NULL,
+  shared_legs      int NOT NULL,
+  n_profile_ties   int NOT NULL,
+  n_doc_ties       int NOT NULL,
+  assigned         boolean NOT NULL DEFAULT false,
+  target_person_id bigint,
+  PRIMARY KEY (profile_id, doc_key)
+);
+CREATE INDEX ON stage.flight_match (assigned) WHERE assigned;
+COMMENT ON TABLE stage.flight_match IS
+  'Сколько уникальных рейсов (дата+номер+OD) общих у cardless-профиля и traveldoc. '
+  'assigned=true только при unique best с обеих сторон и shared≥CARDLESS_MIN_SHARED_LEGS.';
 
 -- все упоминания рейсов с источником (для evidence)
 CREATE TABLE stage.flight_event (
@@ -49,17 +117,29 @@ CREATE INDEX ON stage.flight_event (person_id, from_airport, to_airport, flight_
 COMMENT ON TABLE stage.flight_event IS
   'Все перелёты со всех источников. Один физический рейс может быть несколько раз (разный src/src_id).';
 
+-- справочник аэропорт → страна (из forum; для skyteam/sirena/pointz страны нет)
+CREATE TABLE stage.airport_country (
+  airport  text PRIMARY KEY,
+  country  text NOT NULL
+);
+COMMENT ON TABLE stage.airport_country IS
+  'Мода страны по IATA из forum.forum_flights (dep/arr). Заполняется при сборке рейсов.';
+
 -- уникальные перелёты (для счётчиков и маршрутов)
 CREATE TABLE stage.flight_unique (
   person_id     bigint NOT NULL,
   flight_date   date NOT NULL,
   flight_number text NOT NULL,
-  from_airport  text,
-  to_airport    text
+  from_airport  text NOT NULL DEFAULT '',
+  to_airport    text NOT NULL DEFAULT '',
+  from_country  text,
+  to_country    text
 );
 CREATE INDEX ON stage.flight_unique (person_id, flight_date, flight_number);
+CREATE INDEX ON stage.flight_unique (flight_date, flight_number, from_airport, to_airport);
 COMMENT ON TABLE stage.flight_unique IS
-  'Дедуп stage.flight_event: одна строка на person+дата+рейс+маршрут.';
+  'Дедуп stage.flight_event: одна строка на person+дата+рейс+маршрут. '
+  'from/to_country — из forum напрямую или через stage.airport_country.';
 
 CREATE TABLE stage.high_freq_windows (
   person_id  bigint PRIMARY KEY,

@@ -20,7 +20,9 @@ WINDOW_DAYS_30 = 30
 HIGH_FREQ_MIN_FLIGHTS_30D = 8
 HIGH_FREQ_PEAK_GAP_DAYS = WINDOW_DAYS_30
 
-# ----- всплеск -----
+# ----- всплеск (H2) -----
+# now_30d / prev_30d >= RATIO при now >= MIN_NOW и prev > 0.
+# prev = 0 → недостаточно данных, не всплеск.
 SPIKE_MIN_RATIO = 2.0
 SPIKE_MIN_NOW = 5
 SPIKE_PEAK_GAP_DAYS = WINDOW_DAYS_30
@@ -45,6 +47,15 @@ SHADOW_ROUTE_MAX_FLIGHTS = 120
 SHADOW_RARE_MIN_REPEATS = 2
 SHADOW_RARE_ROUTE_MIN_FLIGHTS = 5
 SHADOW_RARE_ROUTE_MAX_FLIGHTS = 40
+
+# ----- пассажиры без карт (Forum ↔ Sirena) -----
+# Склейка только если ≥ N уникальных общих рейсов (дата + номер + OD)
+# и лучший кандидат уникален с обеих сторон (нет ничьей).
+CARDLESS_MIN_SHARED_LEGS = 2
+# Мягкие сигналы при ничьей на лучших ногах:
+# 1) одинаковая валидная ДР у нескольких doc → один человек (часто РФ+загран)
+# 2) ФИО в последнюю очередь (шумный транслит): Jaccard токенов ≥ порога и единственный победитель
+CARDLESS_FIO_JACCARD_MIN = 0.5
 
 # ----- служебное -----
 # Пустой код и мусорный REA (в route_seq сравнение через UPPER).

@@ -1,5 +1,8 @@
--- Конфликт документов Sirena (traveldoc) через карту FF#.
--- Тип по числу цифр (в дампе только 9/10): 10 = паспорт РФ, 9 = загран, иначе other.
+-- Конфликт документов Sirena (traveldoc).
+-- Источники привязки к person_id:
+--   1) FF# → stage.card_person
+--   2) нормализованный traveldoc → stage.person_anchor (sirena_doc)
+-- Тип по числу цифр: 10 = паспорт РФ, 9 = загран, иначе other.
 -- Finding: только ≥2 разных номера внутри одного типа (RF / foreign / other).
 
 TRUNCATE stage.doc_conflict;
@@ -12,20 +15,41 @@ INSERT INTO stage.doc_conflict (
   n_other, other_docs, other_ids
 )
 WITH mapped AS (
-  SELECT DISTINCT
-    cp.person_id,
-    nullif(btrim(r.traveldoc), '') AS doc,
-    length(regexp_replace(btrim(r.traveldoc), '[^0-9]', '', 'g')) AS ndigits,
-    r.sirena_record_pk::text AS src_id
-  FROM skyteam.sirena_records r
-  JOIN stage.card_person cp
-    ON cp.card_key = meta.norm_loyalty_card(
-         upper(substring(r.paxadditionalinfo from 'FF#([A-Za-z]{2})')),
-         substring(r.paxadditionalinfo
-                   from 'FF#[A-Za-z]{2}[[:space:]]*([0-9]+)')
-       )
-  WHERE r.paxadditionalinfo ~ 'FF#[A-Za-z]{2}'
-    AND coalesce(btrim(r.traveldoc), '') NOT IN ('', 'N/A')
+  SELECT DISTINCT person_id, doc, ndigits, src_id
+  FROM (
+    SELECT
+      cp.person_id,
+      nullif(btrim(r.traveldoc), '') AS doc,
+      length(regexp_replace(btrim(r.traveldoc), '[^0-9]', '', 'g')) AS ndigits,
+      r.sirena_record_pk::text AS src_id
+    FROM skyteam.sirena_records r
+    JOIN stage.card_person cp
+      ON cp.card_key = meta.norm_loyalty_card(
+           upper(substring(r.paxadditionalinfo from 'FF#([A-Za-z]{2})')),
+           substring(r.paxadditionalinfo
+                     from 'FF#[A-Za-z]{2}[[:space:]]*([0-9]+)')
+         )
+    WHERE r.paxadditionalinfo ~ 'FF#[A-Za-z]{2}'
+      AND coalesce(btrim(r.traveldoc), '') NOT IN ('', 'N/A')
+
+    UNION
+
+    SELECT
+      pa.person_id,
+      nullif(btrim(r.traveldoc), '') AS doc,
+      length(regexp_replace(btrim(r.traveldoc), '[^0-9]', '', 'g')) AS ndigits,
+      r.sirena_record_pk::text AS src_id
+    FROM skyteam.sirena_records r
+    JOIN stage.person_anchor pa
+      ON pa.anchor_type = 'sirena_doc'
+     AND pa.anchor_key = upper(
+           regexp_replace(btrim(r.traveldoc), '[^0-9A-Za-z]', '', 'g')
+         )
+    WHERE coalesce(btrim(r.traveldoc), '') NOT IN ('', 'N/A')
+      -- FF#-строки уже идут через card_person; иначе один passport
+      -- мог бы «приклеить» чужие FF-записи к cardless-человеку
+      AND NOT (coalesce(r.paxadditionalinfo, '') ~ 'FF#[A-Za-z]{2}')
+  ) u
 ),
 typed AS (
   SELECT

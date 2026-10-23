@@ -3,8 +3,9 @@
 --
 --   feat.person_features  — только числа для модели
 --   feat.person_evidence  — пояснения и id строк источников (FK 1:1)
---   feat.person_card      — карта лояльности ↔ person_id
---   feat.card_conflict    — карта у ≥2 аккаунтов (аномалия, не «норма»)
+--   feat.person           — сущность пользователя (ФИО, ДР, документы, карты)
+--   feat.flight           — каталог рейсов (сколько людей, страны, источники)
+--   feat.card_conflict    — карта у ≥2 аккаунтов (аномалия)
 --
 -- Сборка:  python -m analysis.build_person_wide
 -- =============================================================================
@@ -17,12 +18,22 @@ COMMENT ON SCHEMA feat IS
 
 DROP TABLE IF EXISTS feat.card_conflict CASCADE;
 DROP TABLE IF EXISTS feat.person_evidence CASCADE;
+DROP TABLE IF EXISTS feat.person CASCADE;
+DROP TABLE IF EXISTS feat.flight CASCADE;
 DROP TABLE IF EXISTS feat.person_card CASCADE;
+DROP TABLE IF EXISTS feat.person_anchor CASCADE;
 DROP TABLE IF EXISTS feat.person_features CASCADE;
 
 -- ---------- 1) Цифры для модели ----------
 CREATE TABLE feat.person_features (
   person_id                bigserial PRIMARY KEY,
+
+  -- как собран человек: card | flight_match | forum_profile | sirena_doc
+  identity_kind            text NOT NULL DEFAULT 'card',
+  -- false = не удалось привязать паспорт (forum без матча к Sirena)
+  identity_resolved        boolean NOT NULL DEFAULT true,
+  -- сколько уникальных общих рейсов Forum↔Sirena при flight_match (иначе 0)
+  match_shared_legs        int NOT NULL DEFAULT 0,
 
   cards_n                  int NOT NULL DEFAULT 0,
   names_distinct_n         int NOT NULL DEFAULT 0,
@@ -48,8 +59,15 @@ COMMENT ON TABLE feat.person_features IS
   'Числовая матрица признаков: одна строка = один человек (person_id). Без текстов и списков id — удобно отдавать в ML.';
 
 COMMENT ON COLUMN feat.person_features.person_id IS
-  'Суррогатный id человека. Стабилен при той же склейке карт (нумерация по min card_key). '
-  'После DROP+полной пересборки может сдвинуться, если изменился набор карт.';
+  'Суррогатный id человека. Сначала 1..Nc по картам (min card_key), затем cardless. '
+  'После DROP+полной пересборки может сдвинуться.';
+COMMENT ON COLUMN feat.person_features.identity_kind IS
+  'card = склейка по картам; flight_match = forum↔sirena по ≥K рейсам; '
+  'forum_profile = только форум без паспорта; sirena_doc = только traveldoc без FF#.';
+COMMENT ON COLUMN feat.person_features.identity_resolved IS
+  'true если есть карта и/или traveldoc; false — forum без надёжного матча (для статы, пометка «хз»).';
+COMMENT ON COLUMN feat.person_features.match_shared_legs IS
+  'Число уникальных совпавших рейсов (дата+номер+OD) при склейке flight_match; иначе 0.';
 COMMENT ON COLUMN feat.person_features.cards_n IS
   'Сколько карт лояльности склеили в этого человека.';
 COMMENT ON COLUMN feat.person_features.names_distinct_n IS
@@ -63,7 +81,8 @@ COMMENT ON COLUMN feat.person_features.high_freq_windows_n IS
 COMMENT ON COLUMN feat.person_features.high_freq_max_flights_30d IS
   'Максимум рейсов в любом скользящем окне 30 дней (главный признак частоты для модели).';
 COMMENT ON COLUMN feat.person_features.spike_windows_n IS
-  'Число непересекающихся окон «всплеск» vs предыдущие 30 дней (config SPIKE_*).';
+  'Число непересекающихся окон всплеска: now_30d/prev_30d ≥ SPIKE_MIN_RATIO '
+  'при now ≥ SPIKE_MIN_NOW и prev > 0 (иначе недостаточно истории).';
 COMMENT ON COLUMN feat.person_features.flight_conflict_n IS
   'Конфликты маршрута между источниками; часто шум forum↔skyteam — не единственный сигнал.';
 COMMENT ON COLUMN feat.person_features.route_gap_n IS
@@ -87,17 +106,53 @@ COMMENT ON COLUMN feat.person_features.route_tail_n IS
 COMMENT ON COLUMN feat.person_features.route_tail_rare_n IS
   'Хвост на редких OD (SHADOW_RARE_ROUTE_*): сильнее как finding — малолюдный маршрут.';
 
--- карта ↔ человек (для отладки и фич по картам)
-CREATE TABLE feat.person_card (
-  person_id bigint NOT NULL REFERENCES feat.person_features(person_id) ON DELETE CASCADE,
-  card_key  text NOT NULL,
-  PRIMARY KEY (person_id, card_key)
+-- сущность пользователя (1:1 с person_features)
+CREATE TABLE feat.person (
+  person_id            bigint PRIMARY KEY
+                       REFERENCES feat.person_features(person_id) ON DELETE CASCADE,
+  birth_date           date,
+  name_forum           text,
+  name_pointz          text,
+  name_sirena          text,
+  doc_passport_rf      text,
+  doc_passport_foreign text,
+  cards                text
 );
-CREATE INDEX ON feat.person_card (card_key);
-COMMENT ON TABLE feat.person_card IS
-  'Связь person_id ↔ нормализованная карта (FB 123). Дублирует stage.card_person на уровне feat. '
-  'PK (person_id, card_key): после склейки карта принадлежит одному кластеру; '
-  'если карта была у нескольких аккаунтов — см. feat.card_conflict.';
+COMMENT ON TABLE feat.person IS
+  'Сущность пользователя для отчётов: ДР, ФИО по источникам, паспорт РФ / загран, список карт. '
+  'NULL = нет данных. Карты и якоря для сборки остаются в stage.card_person / stage.person_anchor.';
+COMMENT ON COLUMN feat.person.birth_date IS
+  'Дата рождения из Sirena (мода валидных YYYY-MM-DD; N/A и мусор отбрасываются). '
+  'В forum/pointz ДР нет.';
+COMMENT ON COLUMN feat.person.doc_passport_rf IS
+  'Паспорт РФ: traveldoc с 10 цифрами (если несколько — через « | »).';
+COMMENT ON COLUMN feat.person.doc_passport_foreign IS
+  'Загран: traveldoc с 9 цифрами (если несколько — через « | »).';
+COMMENT ON COLUMN feat.person.cards IS
+  'Карты лояльности через « | » (нормализованные, как в stage.card_person).';
+
+-- каталог физических рейсов (для статистики / отчёта)
+CREATE TABLE feat.flight (
+  flight_date   date NOT NULL,
+  flight_number text NOT NULL,
+  from_airport  text NOT NULL DEFAULT '',
+  to_airport    text NOT NULL DEFAULT '',
+  from_country  text,
+  to_country    text,
+  people_n      int NOT NULL,
+  sources       text,
+  PRIMARY KEY (flight_date, flight_number, from_airport, to_airport)
+);
+CREATE INDEX ON feat.flight (people_n DESC);
+CREATE INDEX ON feat.flight (from_country, to_country);
+COMMENT ON TABLE feat.flight IS
+  'Один физический рейс (дата+номер+OD): сколько наших person_id на нём летело, страны, '
+  'какие источники его видели (forum/skyteam/pointz/sirena).';
+COMMENT ON COLUMN feat.flight.flight_number IS
+  'Номер авиарейса из источников (SU1383, DL1280) — не наш суррогатный id. '
+  'Одинаковый номер в forum и Sirena значит «тот же коммерческий рейс», не FK между таблицами.';
+COMMENT ON COLUMN feat.flight.people_n IS
+  'Число distinct person_id в stage.flight_unique на этом ключе рейса.';
 
 -- аномалия: одна карта → несколько аккаунтов (сохраняем, не «проглатываем»)
 CREATE TABLE feat.card_conflict (
@@ -126,6 +181,7 @@ CREATE TABLE feat.person_evidence (
   names_sirena           text,
   forum_profile_ids      text,
   pointz_user_ids        text,
+  sirena_docs            text,
   first_flight_date      date,
   last_flight_date       date,
 

@@ -1,23 +1,37 @@
-<<<<<<< HEAD
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
 
-/data/
-.env
-.venv/
-__pycache__/
-*.pyc
-=======
-.venv/
-__pycache__/
-*.pyc
-.env
+# IDE / OS
 .idea/
+.vscode/
+*.swp
+.DS_Store
+.~lock.*
+
+# Secrets / local env
+.env
+.env.*
+
+# Raw data & build artifacts (не в git)
+/data/
 staging/
 .extract/
 output/
 *.csv
 *.xlsx
 *.yaml
-*.yml
+# docker-compose оставляем
 !docker-compose.yml
 !requirements.txt
->>>>>>> 4b27e99 (commit)
+
+# PostgreSQL dumps (тяжёлые; отдаём через zip отдельно)
+*.dump
+dump/
+docker/dump/
+
+# Local Docker volume leftovers
+pgdata/

@@ -70,8 +70,9 @@ Python только подставляет `__THR__` и т.п. и вызывае
 
 ## Docker (готовая БД для команды)
 
-Сборка для девочек: **`/home/thm/Загрузки/spy_db_ready.zip`** (~224 MB).  
+Сборка для девочек: **`/home/thm/Загрузки/spy_db_ready.zip`** (~263 MB).  
 Внутри: `docker-compose.yml` (Postgres **17**), `dump/spy_flights.dump`, restore-скрипт, инструкция Windows.
+Витрины: `feat.person`, `feat.person_features`, `feat.flight`, `stage.flight_unique` (+ страны).
 
 ```bash
 unzip spy_db_ready.zip && cd spy_db_ready   # или распаковать в папку
