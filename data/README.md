@@ -16,10 +16,6 @@ cd /home/thm/skyteam_parser
 .venv/bin/python scripts/verify_feat.py
 ```
 
-## Почему в `person_evidence` много NULL
-
-Это **не баг**. Одна строка evidence = один человек, колонки на **все** критерии.
-
 | В `person_features` | В `person_evidence` |
 |---------------------|---------------------|
 | `spike_windows_n = 0` | `spike_*` = **NULL** (критерий не сработал) |
