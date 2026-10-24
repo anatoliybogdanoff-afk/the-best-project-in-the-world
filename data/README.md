@@ -1,6 +1,5 @@
-# Catch the Spies — DATA (Маша Валова)
+# Catch the Spies
 
-## Что запускать
 
 **Пересобрать витрины с нуля** (сырые `forum` / `skyteam` / `pointz` **не трогает**):
 
